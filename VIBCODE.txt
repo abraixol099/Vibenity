@@ -1,0 +1,218 @@
+# ============================================================
+# 💎 VIBE-CODE AI STUDIO ULTRA — by Team Innovex Coders
+# ============================================================
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import numpy as np
+import json
+from datetime import datetime
+
+# -----------------------------
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(page_title="Vibe-Code AI Studio Ultra", page_icon="💎", layout="wide")
+
+# -----------------------------
+# BUILT-IN DATASETS
+# -----------------------------
+DATASETS = {
+    "Sales Data": pd.DataFrame({
+        "Region": ["North", "South", "East", "West", "Central"],
+        "Sales": [120, 150, 100, 180, 140],
+        "Profit": [30, 40, 25, 60, 35],
+        "Year": [2020, 2021, 2022, 2023, 2024]
+    }),
+    "Student Performance": pd.DataFrame({
+        "Student": ["A", "B", "C", "D", "E", "F"],
+        "Math": [85, 90, 75, 60, 95, 70],
+        "Science": [88, 76, 85, 60, 90, 80],
+        "English": [78, 89, 70, 68, 92, 77]
+    }),
+    "Climate Data": pd.DataFrame({
+        "Month": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+        "Temperature": [20, 22, 25, 28, 30, 32, 33, 31, 29, 26, 23, 21],
+        "Rainfall": [100, 80, 60, 40, 20, 10, 15, 30, 50, 70, 90, 110]
+    }),
+    "Website Analytics": pd.DataFrame({
+        "Month": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+        "Visitors": [1200, 1500, 1700, 1600, 2000, 2500],
+        "Conversions": [80, 90, 100, 95, 120, 140],
+        "Bounce Rate": [60, 55, 52, 50, 48, 45]
+    })
+}
+
+# -----------------------------
+# INTENT & THEMES
+# -----------------------------
+INTENT_KEYWORDS = {
+    "Comparison": ["compare", "versus", "across", "rank"],
+    "Trend": ["trend", "increase", "decrease", "growth", "year", "time"],
+    "Composition": ["share", "portion", "contribution", "part"],
+    "Distribution": ["distribution", "spread", "range", "variance"],
+    "Relationship": ["relationship", "correlation", "link", "impact"]
+}
+
+THEMES = {"Dark": "plotly_dark", "Light": "plotly_white", "Minimal": "simple_white"}
+
+# -----------------------------
+# INTELLIGENCE FUNCTIONS
+# -----------------------------
+def detect_intent(goal: str) -> str:
+    goal = goal.lower()
+    for intent, keys in INTENT_KEYWORDS.items():
+        if any(k in goal for k in keys):
+            return intent
+    return "Comparison"
+
+def recommend_chart(intent: str):
+    charts = {"Comparison": "Bar", "Trend": "Line", "Composition": "Pie",
+              "Distribution": "Histogram", "Relationship": "Scatter"}
+    return charts.get(intent, "Bar")
+
+def ai_summary(df, x, y, intent):
+    """Enhanced AI Summary - multiple reasoning layers"""
+    try:
+        lines = []
+        # General shape
+        lines.append(f"Dataset contains **{df.shape[0]} records** and **{df.shape[1]} columns**.")
+        # Comparison
+        if intent == "Comparison":
+            top = df.loc[df[y].idxmax(), x]
+            bottom = df.loc[df[y].idxmin(), x]
+            gap = round(df[y].max() - df[y].min(), 2)
+            lines.append(f"🔹 The highest {y.lower()} is in **{top}**, and the lowest in **{bottom}** (gap = {gap}).")
+        # Trend
+        if intent == "Trend" and "Year" in df.columns:
+            yearly = df.groupby("Year")[y].sum()
+            change = round(((yearly.iloc[-1] - yearly.iloc[0]) / yearly.iloc[0]) * 100, 1)
+            direction = "increased 📈" if change > 0 else "decreased 📉"
+            lines.append(f"Over the years, **{y}** has {direction} by {abs(change)}%.")
+        # Correlation check
+        if len(df.select_dtypes(include=np.number).columns) > 1:
+            corr = df.select_dtypes(include=np.number).corr()
+            high_corr = corr.stack().sort_values(ascending=False)
+            top_corr = high_corr[high_corr < 1].head(1)
+            if not top_corr.empty:
+                a, b = top_corr.index[0]
+                lines.append(f"📈 The strongest numeric correlation is between **{a}** and **{b}** ({round(top_corr.values[0],2)}).")
+        # Outlier hint
+        if df[y].std() > df[y].mean() * 0.5:
+            lines.append(f"⚠️ Data shows high variability; consider using a box plot to explore outliers.")
+        return "\n".join(lines)
+    except Exception:
+        return "Unable to analyze this dataset deeply."
+
+def create_chart(df, chart_type, x, y, theme):
+    title = f"{chart_type} of {y} vs {x}"
+    try:
+        if chart_type == "Bar":
+            fig = px.bar(df, x=x, y=y, color=x, title=title, template=theme)
+        elif chart_type == "Line":
+            fig = px.line(df, x=x, y=y, markers=True, title=title, template=theme)
+        elif chart_type == "Pie":
+            fig = px.pie(df, names=x, values=y, hole=0.3, title=f"Composition of {y} by {x}", template=theme)
+        elif chart_type == "Area":
+            fig = px.area(df, x=x, y=y, title=title, template=theme)
+        elif chart_type == "Scatter":
+            fig = px.scatter(df, x=x, y=y, color=x, size=y, title=title, template=theme)
+        elif chart_type == "Histogram":
+            fig = px.histogram(df, x=y, nbins=15, title=f"Distribution of {y}", template=theme)
+        else:
+            fig = px.bar(df, x=x, y=y, title=title, template=theme)
+        return fig
+    except Exception:
+        return px.bar(title="Error rendering chart.")
+
+# -----------------------------
+# SIDEBAR
+# -----------------------------
+st.sidebar.title("⚙️ Controls")
+
+examples = [
+    "Compare regional sales and profits",
+    "Show yearly sales growth trend",
+    "Analyze composition of revenue by region",
+    "Understand distribution of profit margins",
+    "Check relationship between expenses and sales"
+]
+
+goal = st.sidebar.text_area("🧠 Your Data Goal", placeholder=np.random.choice(examples))
+dataset_name = st.sidebar.selectbox("📂 Choose Dataset", list(DATASETS.keys()))
+theme_choice = st.sidebar.radio("🎨 Theme", list(THEMES.keys()), horizontal=True)
+chart_choice = st.sidebar.selectbox("📈 Chart Type", ["Auto", "Bar", "Line", "Pie", "Area", "Scatter", "Histogram"])
+uploaded_file = st.sidebar.file_uploader("⬆️ Upload CSV/Excel", type=["csv", "xlsx"])
+st.sidebar.caption("💡 Made with ❤️ by Team Innovex Coders")
+
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+if uploaded_file:
+    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
+else:
+    df = DATASETS[dataset_name]
+
+# -----------------------------
+# BASIC STATS SECTION
+# -----------------------------
+st.markdown("## 📊 Data Overview")
+st.write(f"Rows: {df.shape[0]} | Columns: {df.shape[1]}")
+st.dataframe(df.head())
+
+num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+cat_cols = df.select_dtypes(exclude=["number"]).columns.tolist()
+
+st.markdown("### 📈 Dataset Statistics")
+st.dataframe(df.describe())
+
+# -----------------------------
+# AI INTELLIGENCE ENGINE
+# -----------------------------
+intent = detect_intent(goal)
+auto_chart = recommend_chart(intent)
+final_chart = chart_choice if chart_choice != "Auto" else auto_chart
+theme = THEMES[theme_choice]
+
+x = st.selectbox("X-Axis", cat_cols + num_cols)
+y = st.selectbox("Y-Axis", num_cols)
+
+# -----------------------------
+# MAIN VISUALIZATION
+# -----------------------------
+st.markdown(f"## 🎯 Visualization — {final_chart} Chart ({intent} Intent)")
+fig = create_chart(df, final_chart, x, y, theme)
+st.plotly_chart(fig, use_container_width=True)
+
+# -----------------------------
+# AI INSIGHTS SECTION
+# -----------------------------
+st.markdown("## 🧠 AI Data Insights")
+st.info(ai_summary(df, x, y, intent))
+
+# -----------------------------
+# CORRELATION HEATMAP (BONUS)
+# -----------------------------
+if len(num_cols) > 1:
+    st.markdown("## 🔥 Correlation Heatmap")
+    corr_fig = px.imshow(df[num_cols].corr(), text_auto=True, color_continuous_scale="RdBu_r", title="Numeric Correlations")
+    st.plotly_chart(corr_fig, use_container_width=True)
+
+# -----------------------------
+# SMART RECOMMENDATIONS
+# -----------------------------
+st.markdown("## 💡 Smart Recommendations")
+suggestions = {
+    "Trend": "Try a line or area chart to visualize changes over time.",
+    "Comparison": "Bar or column charts highlight category differences effectively.",
+    "Composition": "Use pie or stacked bar charts to show parts of a whole.",
+    "Distribution": "Histograms or box plots reveal spread and outliers.",
+    "Relationship": "Scatter plots uncover variable interactions."
+}
+st.success(suggestions.get(intent, "Use a clear chart and consistent color scheme for best storytelling."))
+
+# -----------------------------
+# FOOTER
+# -----------------------------
+st.markdown("---")
+st.markdown("<center>✨ Made with ❤️ by <b>Team Innovex Coders</b> | Powered by Streamlit + Plotly</center>", unsafe_allow_html=True)
